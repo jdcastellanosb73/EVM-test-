@@ -19,6 +19,7 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "httpx2>=2.13.1",
+    "hypothesis>=6.168.3",
 ]
 
 [tool.uv]
