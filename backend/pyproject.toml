@@ -1,0 +1,70 @@
+[project]
+name = "evm-tracker-api"
+version = "0.1.0"
+description = "REST API to track project activities and compute Earned Value Management indicators"
+readme = "../README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "pydantic-settings>=2.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "httpx2>=2.13.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes: unused imports and variables
+    "I",        # import order
+    "N",        # naming conventions
+    "UP",       # modern syntax
+    "B",        # likely bugs
+    "SIM",      # simplifications
+    "C90",      # cyclomatic complexity
+    "ERA",      # commented-out code
+    "ARG",      # unused arguments
+    "PL",       # pylint rules, including magic values (PLR2004)
+    "PT",       # pytest style
+    "T20",      # print statements
+    "S",        # security
+    "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --cov=app --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+skip_empty = true
