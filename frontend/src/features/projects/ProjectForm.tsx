@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useSaveProject } from '../../api/queries';
 import type { Project, ProjectPayload } from '../../api/types';
+import { AlertMessage } from '../../components/Feedback';
+import { FormActions } from '../../components/FormActions';
 import { FormField } from '../../components/FormField';
 import { fieldErrorsFrom, formErrorFrom } from '../../lib/apiErrors';
 import { DESCRIPTION_MAX_LENGTH, NAME_MAX_LENGTH } from '../../lib/limits';
@@ -68,19 +70,12 @@ export function ProjectForm({ project, onSaved, onCancel }: ProjectFormProps) {
         onChange={(event) => update('cutoffDate')(event.target.value)}
         error={fieldErrors['cutoff_date']}
       />
-      {formError && (
-        <p className="feedback feedback-error" role="alert">
-          {formError}
-        </p>
-      )}
-      <div className="form-actions">
-        <button type="button" className="button-secondary" onClick={onCancel}>
-          Cancelar
-        </button>
-        <button type="submit" className="button-primary" disabled={saveProject.isPending}>
-          {saveProject.isPending ? 'Guardando…' : 'Guardar proyecto'}
-        </button>
-      </div>
+      {formError && <AlertMessage text={formError} />}
+      <FormActions
+        submitLabel="Guardar proyecto"
+        isSaving={saveProject.isPending}
+        onCancel={onCancel}
+      />
     </form>
   );
 }
