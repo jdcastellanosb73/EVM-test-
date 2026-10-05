@@ -10,6 +10,8 @@ export type SchedulePerformanceStatus =
 export interface PerformanceIndex<Status> {
   value: DecimalString | null;
   status: Status;
+  /** Plain-language reading of the status, written by the API. */
+  interpretation: string;
 }
 
 export interface Indicators {
@@ -72,7 +74,7 @@ export interface ActivityPayload {
   actual_cost: DecimalString;
 }
 
-export interface ErrorDetail {
+interface ErrorDetail {
   field: string | null;
   message: string;
 }
