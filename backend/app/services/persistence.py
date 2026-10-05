@@ -42,13 +42,14 @@ def commit_or_raise_conflict(
         session.commit()
     except IntegrityError as error:
         session.rollback()
-        conflict = conflicts_by_constraint.get(_violated_unique_constraint(error))
+        constraint = _violated_unique_constraint(error)
+        conflict = conflicts_by_constraint.get(constraint) if constraint else None
         if conflict is None:
             raise
         raise conflict from error
 
 
-def _violated_unique_constraint(error: IntegrityError) -> str:
+def _violated_unique_constraint(error: IntegrityError) -> str | None:
     if isinstance(error.orig, UniqueViolation):
-        return error.orig.diag.constraint_name or ""
-    return ""
+        return error.orig.diag.constraint_name
+    return None
