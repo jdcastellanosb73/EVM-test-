@@ -16,6 +16,7 @@ from .support import (
     create_activity,
     create_project,
     decimal_from_json,
+    value_and_status,
 )
 
 
@@ -45,8 +46,10 @@ def test_create_activity_returns_201_with_hand_calculated_indicators(
     assert decimal_from_json(indicators["ev"]) == Decimal("9000000.00")
     assert decimal_from_json(indicators["cv"]) == Decimal("-3000000.00")
     assert decimal_from_json(indicators["sv"]) == Decimal("-3000000.00")
-    assert indicators["cpi"] == {"value": "0.7500", "status": "OVER_BUDGET"}
-    assert indicators["spi"] == {"value": "0.7500", "status": "BEHIND_SCHEDULE"}
+    assert value_and_status(indicators["cpi"]) == {"value": "0.7500", "status": "OVER_BUDGET"}
+    assert value_and_status(indicators["spi"]) == {"value": "0.7500", "status": "BEHIND_SCHEDULE"}
+    assert indicators["cpi"]["interpretation"].startswith("Sobre presupuesto")
+    assert indicators["spi"]["interpretation"].startswith("Atrasado")
     assert decimal_from_json(indicators["eac"]) == Decimal("26666666.67")
     assert decimal_from_json(indicators["vac"]) == Decimal("-6666666.67")
 
@@ -56,8 +59,8 @@ def test_activity_without_cost_has_not_applicable_cpi_and_no_estimate(
 ) -> None:
     indicators = create_activity(api_client, project_id, QA_TESTING)["indicators"]
 
-    assert indicators["cpi"] == {"value": None, "status": "NOT_APPLICABLE"}
-    assert indicators["spi"] == {"value": "0.0000", "status": "BEHIND_SCHEDULE"}
+    assert value_and_status(indicators["cpi"]) == {"value": None, "status": "NOT_APPLICABLE"}
+    assert value_and_status(indicators["spi"]) == {"value": "0.0000", "status": "BEHIND_SCHEDULE"}
     assert indicators["eac"] is None
     assert indicators["vac"] is None
 
@@ -148,8 +151,8 @@ def test_get_activity_returns_it_with_indicators(
     assert response.status_code == 200
     contract.check(response, "get", ACTIVITY)
     indicators = response.json()["indicators"]
-    assert indicators["cpi"] == {"value": "1.1111", "status": "UNDER_BUDGET"}
-    assert indicators["spi"] == {"value": "1.0000", "status": "ON_SCHEDULE"}
+    assert value_and_status(indicators["cpi"]) == {"value": "1.1111", "status": "UNDER_BUDGET"}
+    assert value_and_status(indicators["spi"]) == {"value": "1.0000", "status": "ON_SCHEDULE"}
     assert decimal_from_json(indicators["eac"]) == Decimal("7200000.00")
 
 
@@ -187,9 +190,15 @@ def test_update_activity_recalculates_activity_and_project_indicators(
 
     assert response.status_code == 200
     contract.check(response, "put", ACTIVITY)
-    assert response.json()["indicators"]["cpi"] == {"value": "1.0000", "status": "ON_BUDGET"}
+    assert value_and_status(response.json()["indicators"]["cpi"]) == {
+        "value": "1.0000",
+        "status": "ON_BUDGET",
+    }
     project = api_client.get(PROJECT.format(project_id=project_id)).json()
-    assert project["indicators"]["spi"] == {"value": "1.0000", "status": "ON_SCHEDULE"}
+    assert value_and_status(project["indicators"]["spi"]) == {
+        "value": "1.0000",
+        "status": "ON_SCHEDULE",
+    }
 
 
 def test_update_unknown_activity_returns_404(

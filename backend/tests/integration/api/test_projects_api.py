@@ -14,6 +14,7 @@ from .support import (
     create_demo_project,
     create_project,
     decimal_from_json,
+    value_and_status,
 )
 
 
@@ -33,8 +34,8 @@ def test_create_project_returns_201_location_and_empty_indicators(
     indicators = body["indicators"]
     assert_money_fields_are_strings(indicators)
     assert decimal_from_json(indicators["bac"]) == Decimal(0)
-    assert indicators["cpi"] == {"value": None, "status": "NOT_APPLICABLE"}
-    assert indicators["spi"] == {"value": None, "status": "NOT_APPLICABLE"}
+    assert value_and_status(indicators["cpi"]) == {"value": None, "status": "NOT_APPLICABLE"}
+    assert value_and_status(indicators["spi"]) == {"value": None, "status": "NOT_APPLICABLE"}
     assert indicators["eac"] is None
     assert indicators["vac"] is None
 

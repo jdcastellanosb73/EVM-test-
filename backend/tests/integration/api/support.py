@@ -68,3 +68,8 @@ def assert_money_fields_are_strings(indicators: dict[str, Any]) -> None:
     for index in ("cpi", "spi"):
         value = indicators[index]["value"]
         assert value is None or isinstance(value, str), f"{index} = {value!r}"
+
+
+def value_and_status(index: dict[str, Any]) -> dict[str, Any]:
+    """The machine-readable part of a CPI/SPI response; the interpretation is tested apart."""
+    return {"value": index["value"], "status": index["status"]}

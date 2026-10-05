@@ -3,7 +3,15 @@ from typing import Self
 from pydantic import BaseModel, Field
 
 from app.api.schemas.common import IndexString, MoneyString
-from app.domain.evm import CostPerformanceStatus, EvmIndicators, SchedulePerformanceStatus
+from app.domain.evm import (
+    CostPerformanceStatus,
+    EvmIndicators,
+    SchedulePerformanceStatus,
+    interpret_cost_performance,
+    interpret_schedule_performance,
+)
+
+INTERPRETATION_DESCRIPTION = "Plain-language reading of the status for the project leader (Spanish)"
 
 
 class CostPerformanceIndexResponse(BaseModel):
@@ -11,12 +19,22 @@ class CostPerformanceIndexResponse(BaseModel):
     status: CostPerformanceStatus = Field(
         description="Decided on the unrounded value: above 1 under budget, below 1 over budget"
     )
+    interpretation: str = Field(
+        description=INTERPRETATION_DESCRIPTION,
+        examples=["Sobre presupuesto: CPI menor a 1, se está gastando más de lo que se avanza."],
+    )
 
 
 class SchedulePerformanceIndexResponse(BaseModel):
     value: IndexString | None = Field(description="EV / PV. Null when PV is 0")
     status: SchedulePerformanceStatus = Field(
         description="Decided on the unrounded value: above 1 ahead, below 1 behind schedule"
+    )
+    interpretation: str = Field(
+        description=INTERPRETATION_DESCRIPTION,
+        examples=[
+            "Atrasado: SPI menor a 1, se ha avanzado menos de lo planificado a la fecha de corte."
+        ],
     )
 
 
@@ -49,8 +67,16 @@ class IndicatorsResponse(BaseModel):
             ac=indicators.actual_cost,
             cv=indicators.cost_variance,
             sv=indicators.schedule_variance,
-            cpi=CostPerformanceIndexResponse(value=cpi.value, status=cpi.status),
-            spi=SchedulePerformanceIndexResponse(value=spi.value, status=spi.status),
+            cpi=CostPerformanceIndexResponse(
+                value=cpi.value,
+                status=cpi.status,
+                interpretation=interpret_cost_performance(cpi.status),
+            ),
+            spi=SchedulePerformanceIndexResponse(
+                value=spi.value,
+                status=spi.status,
+                interpretation=interpret_schedule_performance(spi.status),
+            ),
             eac=indicators.estimate_at_completion,
             vac=indicators.variance_at_completion,
         )
