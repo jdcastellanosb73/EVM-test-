@@ -76,7 +76,7 @@ EVM-test-/
 │   └── init/
 │       ├── 01_schema.sql          # esquema: fuente de verdad (db y db-test)
 │       └── 02_seed.sql            # proyecto de demo "Portal de clientes" (solo db)
-├── docs/                          # PLAN.md, prompts-log.md
+├── docs/                          # PLAN.md, prompts-log.md, Excel de validación
 ├── .github/workflows/ci.yml       # OPCIONAL: solo si sobra tiempo (§10)
 ├── docker-compose.yml             # db (5434), db-test (5433, aislada, tmpfs), api
 ├── README.md
@@ -168,7 +168,8 @@ Base: `/api/v1`. Documentación OpenAPI en **`/api-docs`**: cada endpoint lleva 
 | DELETE | `/projects/{project_id}/activities/{activity_id}` | 204 | 404 |
 | GET | `/health` | 200 | — |
 
-Formato de error único para todo 4xx, incluido el 422 (se reemplaza el *handler* de FastAPI) y las rutas inexistentes:
+Formato de error único para todo 4xx, incluido el 422 (se reemplaza el *handler* de FastAPI) y las rutas inexistentes.
+Un error inesperado responde 500 `INTERNAL_ERROR` con el mismo formato y sin detalles internos:
 
 ```json
 { "code": "VALIDATION_ERROR", "message": "Request validation failed",
@@ -180,8 +181,10 @@ Bloque de indicadores, el mismo para actividad y proyecto. Dinero, porcentajes e
 ```json
 { "bac": "50000000.00", "pv": "30000000.00", "ev": "20000000.00", "ac": "25000000.00",
   "cv": "-5000000.00", "sv": "-10000000.00",
-  "cpi": { "value": "0.8000", "status": "OVER_BUDGET" },
-  "spi": { "value": "0.6667", "status": "BEHIND_SCHEDULE" },
+  "cpi": { "value": "0.8000", "status": "OVER_BUDGET",
+           "interpretation": "Sobre presupuesto: CPI menor a 1, se está gastando más de lo que se avanza." },
+  "spi": { "value": "0.6667", "status": "BEHIND_SCHEDULE",
+           "interpretation": "Atrasado: SPI menor a 1, se ha avanzado menos de lo planificado a la fecha de corte." },
   "eac": "62500000.00",
   "vac": "-12500000.00" }
 ```
@@ -191,6 +194,7 @@ Bloque de indicadores, el mismo para actividad y proyecto. Dinero, porcentajes e
 | — | Rutas anidadas `/projects/{id}/activities/{id}` | Rutas planas `/activities/{id}` | Pedir una actividad por fuera de su proyecto da 404. La pertenencia queda en el contrato. |
 | — | `PUT` con el recurso completo | `PATCH` parcial | El formulario siempre envía todos los campos. PATCH agrega casos (campos ausentes vs. null) sin ningún uso. |
 | — | Dinero, porcentajes e índices como **string decimal** ya redondeado (dinero 2 decimales, índices 4) | Número JSON | Un número JSON se lee en el front como `float` binario y puede perder precisión. El string conserva el valor exacto; el front lo convierte solo para graficar. Esta decisión reemplaza la de la primera versión del plan. |
+| — | CPI y SPI traen `status` (código estable) **y** `interpretation` (frase en español escrita por el dominio) | Solo el código, dejando la frase al front | El enunciado pide que el API retorne la interpretación. El código sirve para la lógica del cliente y la frase para quien lee; las dos salen del dominio, así que no hay dos fuentes de verdad. |
 | — | Prefijo `/api/v1` | Sin versión | Es barato y deja espacio para cambios de contrato. |
 | — | Formato de error plano `{code, message, details}` | Envoltorio `{"error": {...}}` | Es el formato definido por el desarrollador; el envoltorio no aporta información. |
 
