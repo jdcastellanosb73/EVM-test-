@@ -1,24 +1,37 @@
-import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Suspense, lazy, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
 import { useDeleteActivity, useDeleteProject, useProject } from '../../api/queries';
 import type { Activity, Project } from '../../api/types';
 import { ErrorMessage, LoadingMessage } from '../../components/Feedback';
 import { Modal } from '../../components/Modal';
-import { formatDate } from '../../lib/format';
+import { PageLayout, type Crumb } from '../../components/PageLayout';
 import { ActivityForm } from '../activities/ActivityForm';
 import { ActivityTable } from '../activities/ActivityTable';
+import { PROJECTS_LABEL, PROJECTS_PATH } from '../../lib/routes';
+import { ProjectBanner } from './ProjectBanner';
 import { ProjectForm } from './ProjectForm';
+import { ProjectHealth } from './ProjectHealth';
 import { ProjectIndicators } from './ProjectIndicators';
+
+/** Recharts is heavy: load the chart only when a project detail is shown. */
+const EvmChart = lazy(() => import('./EvmChart').then((module) => ({ default: module.EvmChart })));
 
 type ActivityEditor =
   { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; activity: Activity };
 
 const CLOSED: ActivityEditor = { mode: 'closed' };
+const PROJECTS_CRUMB: Crumb = { label: PROJECTS_LABEL, to: PROJECTS_PATH };
+const DEFAULT_DESCRIPTION = 'Indicadores de Valor Ganado a la fecha de corte.';
 
 export function ProjectDetailPage() {
   const projectId = Number(useParams().projectId);
   if (!Number.isInteger(projectId) || projectId <= 0) {
-    return <p className="empty-state">El proyecto solicitado no existe.</p>;
+    return (
+      <PageLayout crumbs={[PROJECTS_CRUMB, { label: 'No encontrado' }]}>
+        <p className="empty-state">El proyecto solicitado no existe.</p>
+      </PageLayout>
+    );
   }
   return <ProjectDetail projectId={projectId} />;
 }
@@ -26,15 +39,21 @@ export function ProjectDetailPage() {
 function ProjectDetail({ projectId }: { projectId: number }) {
   const project = useProject(projectId);
 
+  if (!project.isSuccess) {
+    return (
+      <PageLayout crumbs={[PROJECTS_CRUMB, { label: 'Proyecto' }]}>
+        {project.isPending && <LoadingMessage text="Cargando proyecto…" />}
+        {project.isError && <ErrorMessage error={project.error} />}
+      </PageLayout>
+    );
+  }
   return (
-    <section>
-      <Link to="/" className="back-link">
-        ← Proyectos
-      </Link>
-      {project.isPending && <LoadingMessage text="Cargando proyecto…" />}
-      {project.isError && <ErrorMessage error={project.error} />}
-      {project.isSuccess && <ProjectView project={project.data} />}
-    </section>
+    <PageLayout
+      crumbs={[PROJECTS_CRUMB, { label: project.data.name }]}
+      cutoffDate={project.data.cutoff_date}
+    >
+      <ProjectView project={project.data} />
+    </PageLayout>
   );
 }
 
@@ -45,12 +64,13 @@ function ProjectView({ project }: { project: Project }) {
   const deleteProject = useDeleteProject();
   const deleteActivity = useDeleteActivity(project.id);
 
+  const openNewActivity = () => setActivityEditor({ mode: 'create' });
   const closeActivityEditor = () => setActivityEditor(CLOSED);
 
   const confirmDeleteProject = () => {
     const message = `¿Eliminar "${project.name}" y sus ${project.activities.length} actividades?`;
     if (window.confirm(message)) {
-      deleteProject.mutate(project.id, { onSuccess: () => navigate('/') });
+      deleteProject.mutate(project.id, { onSuccess: () => navigate(PROJECTS_PATH) });
     }
   };
 
@@ -62,20 +82,19 @@ function ProjectView({ project }: { project: Project }) {
 
   return (
     <>
-      <header className="page-header">
+      <header className="hero">
         <div>
+          <p className="eyebrow">Proyecto</p>
           <h1>{project.name}</h1>
-          <p className="page-subtitle">
-            Fecha de corte: {formatDate(project.cutoff_date)}
-            {project.description && ` · ${project.description}`}
-          </p>
+          <p>{project.description ?? DEFAULT_DESCRIPTION}</p>
         </div>
-        <div className="header-actions">
+        <div className="hero-actions">
           <button
             type="button"
             className="button-secondary"
             onClick={() => setIsEditingProject(true)}
           >
+            <Pencil aria-hidden="true" />
             Editar proyecto
           </button>
           <button
@@ -84,25 +103,44 @@ function ProjectView({ project }: { project: Project }) {
             disabled={deleteProject.isPending}
             onClick={confirmDeleteProject}
           >
+            <Trash2 aria-hidden="true" />
             Eliminar proyecto
+          </button>
+          <button type="button" className="button-primary" onClick={openNewActivity}>
+            <Plus aria-hidden="true" />
+            Nueva actividad
           </button>
         </div>
       </header>
 
       {deleteProject.isError && <ErrorMessage error={deleteProject.error} />}
+      <ProjectBanner project={project} />
       <ProjectIndicators indicators={project.indicators} />
 
-      <section className="panel" aria-labelledby="activities-title">
-        <div className="panel-header">
-          <h2 id="activities-title">Actividades</h2>
-          <button
-            type="button"
-            className="button-primary"
-            onClick={() => setActivityEditor({ mode: 'create' })}
-          >
-            Nueva actividad
+      <div className="analysis-grid">
+        {project.activities.length > 0 ? (
+          <Suspense fallback={<LoadingMessage text="Cargando gráfica…" />}>
+            <EvmChart activities={project.activities} />
+          </Suspense>
+        ) : (
+          <section className="card chart-card">
+            <p className="empty-state">Agrega actividades para ver la gráfica PV / EV / AC.</p>
+          </section>
+        )}
+        <ProjectHealth indicators={project.indicators} />
+      </div>
+
+      <section className="card activities-card" aria-labelledby="activities-title">
+        <header className="card-heading">
+          <div>
+            <h2 id="activities-title">Actividades del proyecto</h2>
+            <p>Avance, costo e indicadores de cada actividad, con el total del proyecto</p>
+          </div>
+          <button type="button" className="button-primary" onClick={openNewActivity}>
+            <Plus aria-hidden="true" />
+            Agregar actividad
           </button>
-        </div>
+        </header>
         {deleteActivity.isError && <ErrorMessage error={deleteActivity.error} />}
         {project.activities.length === 0 ? (
           <p className="empty-state">
