@@ -125,6 +125,10 @@ npm run lint
 npm run format:check
 ```
 
+```bash
+npm test
+```
+
 ## Estructura
 
 ```
