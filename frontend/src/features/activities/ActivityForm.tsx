@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useSaveActivity } from '../../api/queries';
 import type { Activity, ActivityPayload } from '../../api/types';
+import { AlertMessage } from '../../components/Feedback';
+import { FormActions } from '../../components/FormActions';
 import { FormField } from '../../components/FormField';
 import { fieldErrorsFrom, formErrorFrom } from '../../lib/apiErrors';
 import {
@@ -106,19 +108,12 @@ export function ActivityForm({ projectId, activity, onSaved, onCancel }: Activit
         hint="Gastado hasta la fecha de corte (0 o más)"
         {...fieldProps('actual_cost')}
       />
-      {formError && (
-        <p className="feedback feedback-error" role="alert">
-          {formError}
-        </p>
-      )}
-      <div className="form-actions">
-        <button type="button" className="button-secondary" onClick={onCancel}>
-          Cancelar
-        </button>
-        <button type="submit" className="button-primary" disabled={saveActivity.isPending}>
-          {saveActivity.isPending ? 'Guardando…' : 'Guardar actividad'}
-        </button>
-      </div>
+      {formError && <AlertMessage text={formError} />}
+      <FormActions
+        submitLabel="Guardar actividad"
+        isSaving={saveActivity.isPending}
+        onCancel={onCancel}
+      />
     </form>
   );
 }

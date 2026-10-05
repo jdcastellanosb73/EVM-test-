@@ -8,10 +8,14 @@ export function LoadingMessage({ text }: { text: string }) {
   );
 }
 
-export function ErrorMessage({ error }: { error: Error }) {
+export function AlertMessage({ text }: { text: string }) {
   return (
     <p className="feedback feedback-error" role="alert">
-      {userMessageFor(error)}
+      {text}
     </p>
   );
+}
+
+export function ErrorMessage({ error }: { error: Error }) {
+  return <AlertMessage text={userMessageFor(error)} />;
 }

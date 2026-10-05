@@ -9,6 +9,7 @@ const LOCALE = 'es-CO';
 const MONEY_DECIMALS = 2;
 const INDEX_DECIMALS = 4;
 const PERCENT_MAX_DECIMALS = 2;
+const AXIS_MAX_DECIMALS = 1;
 export const MISSING_VALUE = '—';
 
 const moneyFormat = new Intl.NumberFormat(LOCALE, {
@@ -39,11 +40,27 @@ export const formatIndex = (value: DecimalString | null) => formatDecimal(indexF
 
 export const formatPercent = (value: DecimalString) => `${formatDecimal(percentFormat, value)} %`;
 
+const axisFormat = new Intl.NumberFormat(LOCALE, {
+  notation: 'compact',
+  maximumFractionDigits: AXIS_MAX_DECIMALS,
+});
+
+/** Chart axis ticks only: Recharts generates them as numbers, and they are approximate by nature. */
+export const formatAxisAmount = (value: number) => axisFormat.format(value);
+
 /** Dates come as ISO "YYYY-MM-DD"; formatted in UTC so the day never shifts. */
 export const formatDate = (isoDate: string | null) =>
   isoDate === null ? MISSING_VALUE : dateFormat.format(new Date(isoDate));
 
+const MINUS_SIGN = '-';
+
 /** Sign of a decimal string, read from its text: no float conversion involved. */
 export function isNegative(value: DecimalString | null): boolean {
-  return value !== null && value.trim().startsWith('-');
+  return value !== null && value.trim().startsWith(MINUS_SIGN);
+}
+
+/** The amount without its sign, for sentences that already say "sobra" or "falta". */
+export function absoluteAmount(value: DecimalString): DecimalString {
+  const trimmed = value.trim();
+  return isNegative(trimmed) ? trimmed.slice(MINUS_SIGN.length) : trimmed;
 }
