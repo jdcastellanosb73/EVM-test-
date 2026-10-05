@@ -20,6 +20,8 @@ dev = [
     "mypy>=1.13",
     "httpx2>=2.13.1",
     "hypothesis>=6.168.3",
+    "jsonschema>=4.26.0",
+    "types-jsonschema>=4.26.0.20260518",
 ]
 
 [tool.uv]

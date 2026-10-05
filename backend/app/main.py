@@ -3,10 +3,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routers import health
+from app.api.errors import EXCEPTION_HANDLERS
+from app.api.routers import activities, health, projects
 from app.config import Settings, get_settings
 from app.db.engine import create_db_engine
 
+API_V1_PREFIX = "/api/v1"
 API_DOCS_PATH = "/api-docs"
 OPENAPI_SCHEMA_PATH = f"{API_DOCS_PATH}/openapi.json"
 
@@ -28,6 +30,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url=OPENAPI_SCHEMA_PATH,
         redoc_url=None,
         lifespan=lifespan,
+        exception_handlers=EXCEPTION_HANDLERS,
     )
     app.include_router(health.router)
+    app.include_router(projects.router, prefix=API_V1_PREFIX)
+    app.include_router(activities.router, prefix=API_V1_PREFIX)
     return app

@@ -11,10 +11,14 @@ DEFAULT_TEST_DATABASE_URL = "postgresql+psycopg://evm:evm@localhost:5433/evm_tes
 UNREACHABLE_DATABASE_URL = "postgresql+psycopg://evm:evm@127.0.0.1:1/evm_test?connect_timeout=1"
 
 
+@pytest.fixture(scope="session")
+def test_database_url() -> str:
+    return os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
+
+
 @pytest.fixture
-def test_settings() -> Settings:
-    database_url = os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
-    return Settings(database_url=database_url)
+def test_settings(test_database_url: str) -> Settings:
+    return Settings(database_url=test_database_url)
 
 
 @pytest.fixture

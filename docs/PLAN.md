@@ -49,7 +49,7 @@ EVM-test-/
 │   │   ├── domain/evm/            # PURO: sin FastAPI ni SQLAlchemy
 │   │   │   ├── values.py          # EarnedValueBase, EvmIndicators, PerformanceIndex (dataclasses frozen)
 │   │   │   ├── calculator.py      # calculate_indicators(base), consolidate(bases)
-│   │   │   ├── interpretation.py  # CostStatus, ScheduleStatus, UnavailableReason
+│   │   │   ├── interpretation.py  # clasificación de CPI y SPI contra 1
 │   │   │   └── constants.py       # PERCENT_SCALE, PERFORMANCE_BASELINE = 1
 │   │   ├── services/              # casos de uso: orquestan la BD y el dominio
 │   │   │   ├── project_service.py
@@ -123,29 +123,31 @@ CREATE INDEX ix_activities_project_id ON activities(project_id);
 ## 5. Dominio EVM
 
 ```python
-EarnedValueBase(bac, pv, ev, ac)                 # 4 montos Decimal
-EarnedValueBase.from_activity(bac, planned_percent, actual_percent, ac)
-calculate_indicators(base) -> EvmIndicators      # pv, ev, ac, bac, cv, sv, cpi, spi, eac, vac
-consolidate(bases) -> EvmIndicators              # = calculate_indicators(suma de las bases)
+ActivityProgress(bac, planned_percent, actual_percent, ac)   # valida al construirse
+EarnedValueBase(bac, pv, ev, ac)                             # 4 montos Decimal, sumables
+calculate_indicators(base) -> EvmIndicators                  # bac, pv, ev, ac, cv, sv, cpi, spi, eac, vac
+calculate_activity_indicators(progress) -> EvmIndicators
+consolidate_project_indicators(activities) -> EvmIndicators  # = calculate_indicators(suma de las bases)
 ```
 
-- **Índices** (`PerformanceIndex`): `value: Decimal | None`, `status` y `reason: UnavailableReason | None`.
-  - Estados del CPI: `UNDER_BUDGET` · `ON_BUDGET` · `OVER_BUDGET` · `NOT_AVAILABLE`.
-  - Estados del SPI: `AHEAD_OF_SCHEDULE` · `ON_SCHEDULE` · `BEHIND_SCHEDULE` · `NOT_AVAILABLE`.
-- **Casos borde.** Se distingue el motivo porque "no ha empezado" y "se gasta sin avanzar" significan cosas distintas para el líder:
+- **Índices** (`PerformanceIndex`): `value: Decimal | None` y `status`.
+  - Estados del CPI: `UNDER_BUDGET` · `ON_BUDGET` · `OVER_BUDGET` · `NOT_APPLICABLE`.
+  - Estados del SPI: `AHEAD_OF_SCHEDULE` · `ON_SCHEDULE` · `BEHIND_SCHEDULE` · `NOT_APPLICABLE`.
+  - El estado se decide con el valor **sin redondear**: CPI 0,99996 se muestra como `1.0000` pero es `OVER_BUDGET`.
+- **Casos borde** (reglas implementadas en `feature/evm-calculation-engine`):
 
 | Caso | Resultado |
 |---|---|
-| AC = 0 y EV = 0 | CPI no disponible, `NO_DATA`. EAC y VAC no disponibles |
-| AC = 0 y EV > 0 | CPI no disponible, `NO_ACTUAL_COST` (avance sin costo registrado). EAC y VAC no disponibles |
-| PV = 0 y EV = 0 | SPI no disponible, `NO_DATA` |
-| PV = 0 y EV > 0 | SPI no disponible, `NO_PLANNED_VALUE` (se avanzó antes de lo planeado) |
-| EV = 0 y AC > 0 | CPI = 0 → `OVER_BUDGET`. EAC no disponible, `ZERO_PERFORMANCE` (BAC / 0) |
-| Proyecto sin actividades | Montos en 0. CPI, SPI, EAC y VAC no disponibles, `NO_DATA` |
+| AC = 0 | CPI `null`, `NOT_APPLICABLE`. EAC y VAC `null` |
+| EV = 0 y AC > 0 | CPI = 0 (valor real) → `OVER_BUDGET`. EAC y VAC `null` (BAC / 0) |
+| PV = 0 | SPI `null`, `NOT_APPLICABLE` |
+| Proyecto sin actividades | Montos en 0. CPI, SPI, EAC y VAC `null` |
 
 | # | Decisión | Alternativa descartada | Motivo |
 |---|---|---|---|
-| — | Un índice no disponible es `null` con un motivo explícito | Devolver 0, 1 o infinito | 0 dice "pésimo" y 1 dice "perfecto": ambos inventan un dato. Infinito no es serializable en JSON. |
+| — | Un índice no disponible es `null` con estado `NOT_APPLICABLE` | Devolver 0, 1 o infinito | 0 dice "pésimo" y 1 dice "perfecto": ambos inventan un dato. Infinito no es serializable en JSON. |
+| — | Un solo estado `NOT_APPLICABLE`, sin motivo | Un motivo por caso (`NO_DATA`, `NO_ACTUAL_COST`, `NO_PLANNED_VALUE`, `ZERO_PERFORMANCE`), propuesto en la primera versión de este plan | Decisión del desarrollador al fijar las reglas del motor (ver `AI_PROCESS.md`). Los montos que explican el caso (AC, EV, PV) viajan en la misma respuesta. |
+| — | EAC = BAC / CPI, calculado como BAC × AC / EV | Dividir por el CPI ya calculado | Es la misma fórmula del enunciado, pero no divide por un cociente ya redondeado. La propiedad EAC × CPI = BAC lo verifica. |
 | — | EAC = BAC / CPI, la fórmula del enunciado | Otras fórmulas del PMI, como AC + (BAC − EV) | El enunciado la fija. Las demás se mencionan en el `AI_PROCESS.md` como alternativa considerada. |
 
 ## 6. Contrato del API
@@ -166,29 +168,31 @@ Base: `/api/v1`. Documentación OpenAPI en **`/api-docs`**: cada endpoint lleva 
 | DELETE | `/projects/{project_id}/activities/{activity_id}` | 204 | 404 |
 | GET | `/health` | 200 | — |
 
-Formato de error único, incluido el 422 (se sobrescribe el *handler* de FastAPI):
+Formato de error único para todo 4xx, incluido el 422 (se reemplaza el *handler* de FastAPI) y las rutas inexistentes:
 
 ```json
-{ "error": { "code": "ACTIVITY_NOT_FOUND", "message": "Activity 7 not found in project 3", "details": [] } }
+{ "code": "VALIDATION_ERROR", "message": "Request validation failed",
+  "details": [ { "field": "body.budget_at_completion", "message": "Input should be greater than 0" } ] }
 ```
 
-Bloque de indicadores, el mismo para actividad y proyecto:
+Bloque de indicadores, el mismo para actividad y proyecto. Dinero, porcentajes e índices viajan como **string**:
 
 ```json
-{ "bac": 50000000.00, "pv": 30000000.00, "ev": 20000000.00, "ac": 25000000.00,
-  "cv": -5000000.00, "sv": -10000000.00,
-  "cpi": { "value": 0.8000, "status": "OVER_BUDGET", "reason": null },
-  "spi": { "value": 0.6667, "status": "BEHIND_SCHEDULE", "reason": null },
-  "eac": { "value": 62500000.00, "reason": null },
-  "vac": { "value": -12500000.00, "reason": null } }
+{ "bac": "50000000.00", "pv": "30000000.00", "ev": "20000000.00", "ac": "25000000.00",
+  "cv": "-5000000.00", "sv": "-10000000.00",
+  "cpi": { "value": "0.8000", "status": "OVER_BUDGET" },
+  "spi": { "value": "0.6667", "status": "BEHIND_SCHEDULE" },
+  "eac": "62500000.00",
+  "vac": "-12500000.00" }
 ```
 
 | # | Decisión | Alternativa descartada | Motivo |
 |---|---|---|---|
 | — | Rutas anidadas `/projects/{id}/activities/{id}` | Rutas planas `/activities/{id}` | Pedir una actividad por fuera de su proyecto da 404. La pertenencia queda en el contrato. |
 | — | `PUT` con el recurso completo | `PATCH` parcial | El formulario siempre envía todos los campos. PATCH agrega casos (campos ausentes vs. null) sin ningún uso. |
-| — | Montos como número JSON ya redondeado | Montos como string decimal | El front los muestra y los grafica directamente. El dominio conserva la precisión exacta (D5). |
+| — | Dinero, porcentajes e índices como **string decimal** ya redondeado (dinero 2 decimales, índices 4) | Número JSON | Un número JSON se lee en el front como `float` binario y puede perder precisión. El string conserva el valor exacto; el front lo convierte solo para graficar. Esta decisión reemplaza la de la primera versión del plan. |
 | — | Prefijo `/api/v1` | Sin versión | Es barato y deja espacio para cambios de contrato. |
+| — | Formato de error plano `{code, message, details}` | Envoltorio `{"error": {...}}` | Es el formato definido por el desarrollador; el envoltorio no aporta información. |
 
 ## 7. Frontend
 
@@ -249,7 +253,7 @@ Seis ramas `feature/*` más la `release`:
 | 0 | `develop` | Se crea desde `main` | — |
 | 1 | `feature/project-scaffolding` | Estructura, docker-compose (`db` + `db-test`), `db/init/` (esquema + seed de demo), `/health`, Swagger, linters, este plan | `develop` |
 | 2 | `feature/evm-calculation-engine` | Motor EVM puro: cálculo, consolidado, interpretación, casos borde, pruebas unitarias y Hypothesis | `develop` |
-| 3 | `feature/evm-api` | Sesión de BD, CRUD de proyectos y actividades, indicadores en las respuestas, formato de errores, `/api-docs` e integración por endpoint | `develop` |
+| 3 | `feature/projects-activities-api` | Sesión de BD, CRUD de proyectos y actividades, indicadores en las respuestas, formato de errores, `/api-docs` e integración por endpoint | `develop` |
 | 4 | `feature/dashboard-ui` | Front: proyectos, tabla de actividades, formulario modal, tarjetas de consolidado y badges | `develop` |
 | 5 | `feature/evm-visualization` | Gráfica PV / EV / AC por actividad | `develop` |
 | 6 | `feature/documentation` | README final y `AI_PROCESS.md` | `develop` |
