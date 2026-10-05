@@ -1,10 +1,18 @@
-from dataclasses import dataclass, fields
+from collections.abc import Callable
+from dataclasses import dataclass, field, fields
 from decimal import Decimal
 from enum import StrEnum
 from typing import Self
 
 from app.domain.evm.constants import MAX_PERCENT, MIN_PERCENT, PERCENT_SCALE, ZERO
 from app.domain.evm.exceptions import InvalidActivityProgressError, ValidationRule
+
+RULE_METADATA_KEY = "rule"
+RULE_CHECKS: dict[ValidationRule, Callable[[Decimal], bool]] = {
+    ValidationRule.MUST_BE_POSITIVE: lambda value: value > ZERO,
+    ValidationRule.MUST_BE_PERCENTAGE: lambda value: MIN_PERCENT <= value <= MAX_PERCENT,
+    ValidationRule.MUST_BE_NON_NEGATIVE: lambda value: value >= ZERO,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,28 +22,26 @@ class ActivityProgress:
     Percentages use the 0-100 scale. Invalid values cannot be constructed.
     """
 
-    budget_at_completion: Decimal
-    planned_percent: Decimal
-    actual_percent: Decimal
-    actual_cost: Decimal
+    budget_at_completion: Decimal = field(
+        metadata={RULE_METADATA_KEY: ValidationRule.MUST_BE_POSITIVE}
+    )
+    planned_percent: Decimal = field(
+        metadata={RULE_METADATA_KEY: ValidationRule.MUST_BE_PERCENTAGE}
+    )
+    actual_percent: Decimal = field(metadata={RULE_METADATA_KEY: ValidationRule.MUST_BE_PERCENTAGE})
+    actual_cost: Decimal = field(metadata={RULE_METADATA_KEY: ValidationRule.MUST_BE_NON_NEGATIVE})
 
     def __post_init__(self) -> None:
-        for field in fields(self):
-            if not getattr(self, field.name).is_finite():
-                raise InvalidActivityProgressError(field.name, ValidationRule.MUST_BE_FINITE)
-        if self.budget_at_completion <= ZERO:
-            raise InvalidActivityProgressError(
-                "budget_at_completion", ValidationRule.MUST_BE_POSITIVE
-            )
-        _require_percentage("planned_percent", self.planned_percent)
-        _require_percentage("actual_percent", self.actual_percent)
-        if self.actual_cost < ZERO:
-            raise InvalidActivityProgressError("actual_cost", ValidationRule.MUST_BE_NON_NEGATIVE)
-
-
-def _require_percentage(field_name: str, value: Decimal) -> None:
-    if not MIN_PERCENT <= value <= MAX_PERCENT:
-        raise InvalidActivityProgressError(field_name, ValidationRule.MUST_BE_PERCENTAGE)
+        values = [
+            (item.name, getattr(self, item.name), item.metadata[RULE_METADATA_KEY])
+            for item in fields(self)
+        ]
+        for field_name, value, _ in values:
+            if not value.is_finite():
+                raise InvalidActivityProgressError(field_name, ValidationRule.MUST_BE_FINITE)
+        for field_name, value, rule in values:
+            if not RULE_CHECKS[rule](value):
+                raise InvalidActivityProgressError(field_name, rule)
 
 
 @dataclass(frozen=True, slots=True)

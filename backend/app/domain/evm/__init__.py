@@ -7,6 +7,10 @@ from app.domain.evm.calculator import (
 )
 from app.domain.evm.constants import PRESENTATION_ROUNDING
 from app.domain.evm.exceptions import InvalidActivityProgressError, ValidationRule
+from app.domain.evm.interpretation import (
+    interpret_cost_performance,
+    interpret_schedule_performance,
+)
 from app.domain.evm.models import (
     ActivityProgress,
     CostPerformanceStatus,
@@ -30,6 +34,8 @@ __all__ = [
     "calculate_activity_indicators",
     "calculate_indicators",
     "consolidate_project_indicators",
+    "interpret_cost_performance",
+    "interpret_schedule_performance",
     "round_index",
     "round_money",
 ]

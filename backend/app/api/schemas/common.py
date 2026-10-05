@@ -57,13 +57,13 @@ class ErrorDetail(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """Single error format for every 4xx response."""
+    """Single error format for every error response (4xx and 500)."""
 
     code: str = Field(
         description=(
             "Stable machine-readable code: PROJECT_NOT_FOUND, ACTIVITY_NOT_FOUND, "
-            "PROJECT_NAME_TAKEN, ACTIVITY_NAME_TAKEN, VALIDATION_ERROR, or the HTTP status "
-            "name (e.g. NOT_FOUND) for unknown routes"
+            "PROJECT_NAME_TAKEN, ACTIVITY_NAME_TAKEN, VALIDATION_ERROR, INTERNAL_ERROR, or the "
+            "HTTP status name (e.g. NOT_FOUND) for unknown routes"
         ),
         examples=["PROJECT_NOT_FOUND"],
     )
