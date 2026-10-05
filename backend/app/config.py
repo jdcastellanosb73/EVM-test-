@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     database_url: str
     app_name: str = "EVM Tracker API"
-    app_version: str = "0.1.0"
+    app_version: str = "1.0.0"
 
 
 @lru_cache
